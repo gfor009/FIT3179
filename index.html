@@ -27,55 +27,64 @@ const spec = {
   title: {text: "UFO Sightings by Country (Absolute Counts)", anchor: "start"},
   projection: {type: "robinson"},
 
-  // 🔹 Use your GeoJSON file (exact filename)
-  data: {url: "ne_110m_admin_0_countries.json", format: {type: "geojson"}},
+  // Start from your CSV, then aggregate to country counts
+  data: { url: "scrubbed.csv" },
 
-  // 🔹 Prepare join key (try ISO_A2 first, then ISO_A2_EH; uppercase for matching)
   transform: [
-    { calculate: "toUpper(datum.properties.ISO_A2 || datum.properties.ISO_A2_EH || '')", as: "ISO_A2_UP" },
+    // Uppercase the CSV two-letter code to match Natural Earth ISO codes
+    { calculate: "toUpper(datum.country || '')", as: "country_upper" },
 
-    // Join to your CSV: ufo_country_counts_joinready.csv (key: country_upper)
+    // Aggregate counts by country code
+    { aggregate: [{op: "count", as: "sightings"}], groupby: ["country_upper"] },
+
+    // Lookup geometry by ISO_A2
     {
-      lookup: "ISO_A2_UP",
+      lookup: "country_upper",
       from: {
-        data: { url: "ufo_country_counts_joinready.csv" },
-        key: "country_upper",
-        fields: ["sightings"]
-      }
+        data: { url: "ne_110m_admin_0_countries.json", format: { type: "geojson" } },
+        key: "properties.ISO_A2",
+        fields: ["geometry","properties.NAME"]
+      },
+      as: ["geom1","name1"]
     },
 
-    // Replace missing sightings with 0 so legend/scales behave
-    { calculate: "isValid(datum.sightings) ? datum.sightings : 0", as: "sightings_filled" }
+    // Fallback lookup by ISO_A2_EH (some NE builds use this)
+    {
+      lookup: "country_upper",
+      from: {
+        data: { url: "ne_110m_admin_0_countries.json", format: { type: "geojson" } },
+        key: "properties.ISO_A2_EH",
+        fields: ["geometry","properties.NAME"]
+      },
+      as: ["geom2","name2"]
+    },
+
+    // Choose whichever geometry/name matched
+    { calculate: "datum.geom1 ? datum.geom1 : datum.geom2", as: "geom" },
+    { calculate: "datum.name1 ? datum.name1 : datum.name2", as: "country_name" }
   ],
 
   layer: [
-    // Graticule
-    {
-      data: { graticule: { step: [20, 20] } },
+    { data: { graticule: { step: [20, 20] } },
       mark: { type: "geoshape", filled: false, stroke: "#d7d7d7", strokeWidth: 0.5 }
     },
-
-    // Choropleth
     {
       mark: { type: "geoshape" },
       encoding: {
+        shape: { field: "geom" },
         color: {
-          field: "sightings_filled", type: "quantitative",
+          field: "sightings", type: "quantitative",
           scale: { scheme: "blues" },
           legend: { title: "Sightings" }
         },
         tooltip: [
-          { field: "properties.NAME", title: "Country" },
-          { field: "ISO_A2_UP", title: "ISO A2" },
-          { field: "sightings_filled", title: "Sightings" }
+          { field: "country_name", title: "Country" },
+          { field: "country_upper", title: "ISO A2" },
+          { field: "sightings", title: "Sightings" }
         ]
       }
     },
-
-    // Borders on top
-    {
-      mark: { type: "geoshape", filled: false, stroke: "#8e97a3", strokeWidth: 0.7 }
-    }
+    { mark: { type: "geoshape", filled: false, stroke: "#8e97a3", strokeWidth: 0.7 }, encoding: { shape: { field: "geom" } } }
   ]
 };
 
