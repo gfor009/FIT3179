@@ -1,0 +1,75 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="utf-8" />
+  <title>UFO Sightings by Country (Absolute)</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <script src="https://cdn.jsdelivr.net/npm/vega@5"></script>
+  <script src="https://cdn.jsdelivr.net/npm/vega-lite@5"></script>
+  <script src="https://cdn.jsdelivr.net/npm/vega-embed@6"></script>
+  <style>
+    :root{--bg:#ffffff;--fg:#0f172a}
+    body{margin:0;background:var(--bg);color:var(--fg);font-family:system-ui,Segoe UI,Roboto,Helvetica,Arial,sans-serif}
+    #vis{max-width:1100px;margin:32px auto;padding:0 16px}
+    footer{max-width:1100px;margin:0 auto 28px;padding:0 16px;font-size:12px;color:#475569}
+  </style>
+</head>
+<body>
+<div id="vis"></div>
+<footer>
+  Data: UFO sighting reports (compiled); Map: Natural Earth. Counts are absolute; consider per-million normalisation in the report.
+</footer>
+
+<script>
+const spec = {
+  $schema: "https://vega.github.io/schema/vega-lite/v5.json",
+  width: 980,
+  height: 560,
+  title: {text: "UFO Sightings by Country (Absolute Counts)", anchor: "start"},
+  projection: {type: "robinson"},
+  data: {url: "ne_countries_110m.topojson", format: {type: "topojson", feature: "countries"}},
+  transform: [
+    // Create uppercase ISO_A2 to match our CSV key
+    {calculate: "toUpper(datum.properties.ISO_A2)", as: "ISO_A2_UP"},
+    {
+      lookup: "ISO_A2_UP",
+      from: {
+        data: {url: "ufo_country_counts_joinready.csv"},
+        key: "country_upper",
+        fields: ["sightings"]
+      }
+    }
+  ],
+  layer: [
+    // Graticule
+    {
+      data: {graticule: {step: [20, 20]}},
+      mark: {type: "geoshape", filled: false, stroke: "#d7d7d7", strokeWidth: 0.5}
+    },
+    // Choropleth
+    {
+      mark: {type: "geoshape"},
+      encoding: {
+        color: {
+          field: "sightings", type: "quantitative",
+          scale: {scheme: "blues"},
+          legend: {title: "Sightings"}
+        },
+        tooltip: [
+          {field: "properties.NAME", title: "Country"},
+          {field: "ISO_A2_UP", title: "ISO A2"},
+          {field: "sightings", title: "Sightings"}
+        ]
+      }
+    },
+    // Borders on top
+    {
+      mark: {type: "geoshape", filled: false, stroke: "#8e97a3", strokeWidth: 0.7}
+    }
+  ]
+};
+
+vegaEmbed("#vis", spec, {actions:false});
+</script>
+</body>
+</html>
